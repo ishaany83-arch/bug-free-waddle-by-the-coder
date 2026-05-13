@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WireGuard VPN Manager</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; flex-direction: column; }
+        .header { background: rgba(0,0,0,0.7); color: white; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        .header h1 { font-size: 28px; margin-bottom: 5px; }
+        .container { flex: 1; display: grid; grid-template-rows: 400px 1fr; gap: 10px; padding: 20px; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .setup-section { background: white; border-radius: 10px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); overflow-y: auto; }
+        .setup-section h2 { color: #667eea; margin-bottom: 20px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #eee; flex-wrap: wrap; }
+        .tab-btn { padding: 10px 20px; background: none; border: none; cursor: pointer; color: #666; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.3s; }
+        .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+        .tab-btn:hover { color: #667eea; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; font-size: 14px; }
+        .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 5px rgba(102,126,234,0.3); }
+        .btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 14px; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .status-box { background: #f0f4ff; border-left: 4px solid #667eea; padding: 15px; border-radius: 5px; margin-top: 15px; font-size: 13px; }
+        .key-display { background: #f5f5f5; padding: 8px; border-radius: 3px; word-break: break-all; font-family: monospace; font-size: 11px; margin: 8px 0; }
+        .website-section { background: white; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column; overflow: hidden; }
+        .website-header { background: #f9fafb; padding: 15px; border-bottom: 1px solid #e5e7eb; display: flex; gap: 10px; align-items: center; }
+        .url-input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+        .url-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 5px rgba(102,126,234,0.3); }
+        .website-content { flex: 1; overflow-y: auto; background: #f9fafb; padding: 20px; }
+        .website-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: #999; flex-direction: column; gap: 20px; text-align: center; }
+        .message { padding: 12px; border-radius: 5px; margin-bottom: 15px; display: none; font-size: 13px; }
+        .message.show { display: block; }
+        .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .message.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .loading { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .container { grid-template-rows: auto 1fr; } .form-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 WireGuard VPN Manager</h1>
+        <p>Complete VPN Setup with Website Access</p>
+    </div>
+
+    <div class="container">
+        <div class="setup-section">
+            <h2>⚙️ VPN Configuration & Control</h2>
+            <div id="setupMessage" class="message"></div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('keys')">🔑 Keys</button>
+                <button class="tab-btn" onclick="switchTab('server')">🖥️ Server</button>
+                <button class="tab-btn" onclick="switchTab('client')">💻 Client</button>
+                <button class="tab-btn" onclick="switchTab('control')">▶️ Control</button>
+                <button class="tab-btn" onclick="switchTab('status')">📊 Status</button>
+            </div>
+
+            <div id="keys-tab" class="tab-content active">
+                <div class="form-group">
+                    <label>Keypair Name:</label>
+                    <input type="text" id="keyName" placeholder="e.g., server" value="server">
+                </div>
+                <button class="btn btn-primary" onclick="generateKeys()">Generate Keypair</button>
+                <div id="keysStatus" class="status-box" style="display: none;">
+                    <strong>Public Key:</strong>
+                    <div id="publicKey" class="key-display"></div>
+                </div>
+            </div>
+
+            <div id="server-tab" class="tab-content">
+                <div class="form-group">
+                    <label>Server Name:</label>
+                    <input type="text" id="serverName" value="server">
+                </div>
+                <div class="form-group">
+                    <label>VPN Address:</label>
+                    <input type="text" id="serverAddress" value="10.0.0.1/24">
+                </div>
+                <div class="form-group">
+                    <label>Port:</label>
+                    <input type="number" id="serverPort" value="51820">
+                </div>
+                <button class="btn btn-primary" onclick="createServer()">Create Server</button>
+                <div id="serverStatus" class="status-box" style="display: none;">
+                    <strong>Public Key:</strong>
+                    <div id="serverPublicKey" class="key-display"></div>
+                </div>
+            </div>
+
+            <div id="client-tab" class="tab-content">
+                <div class="form-group">
+                    <label>Client Name:</label>
+                    <input type="text" id="clientName" value="client1">
+                </div>
+                <div class="form-group">
+                    <label>Server Endpoint:</label>
+                    <input type="text" id="serverEndpoint" placeholder="IP:PORT">
+                </div>
+                <div class="form-group">
+                    <label>Client Address:</label>
+                    <input type="text" id="clientAddress" value="10.0.0.2/32">
+                </div>
+                <div class="form-group">
+                    <label>Server Public Key:</label>
+                    <input type="text" id="clientServerKey" placeholder="Paste key">
+                </div>
+                <button class="btn btn-primary" onclick="createClient()">Create Client</button>
+            </div>
+
+            <div id="control-tab" class="tab-content">
+                <div class="form-group">
+                    <label>Config File:</label>
+                    <select id="configSelect"></select>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="startVPN()">▶️ Start VPN</button>
+                    <button class="btn btn-danger" onclick="stopVPN()">⏹️ Stop VPN</button>
+                </div>
+            </div>
+
+            <div id="status-tab" class="tab-content">
+                <button class="btn btn-primary" onclick="refreshStatus()">🔄 Refresh</button>
+                <div id="vpnStatus" class="status-box">
+                    <div><strong>Status:</strong> <span id="statusInterface">Checking...</span></div>
+                    <div><strong>Peers:</strong> <span id="statusPeers">0</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="website-section">
+            <div class="website-header">
+                <input type="text" class="url-input" id="websiteUrl" placeholder="Enter URL (e.g., google.com)" value="google.com">
+                <button class="btn btn-primary" onclick="loadWebsite()">🌐 Load</button>
+            </div>
+            <div class="website-content" id="websiteContainer">
+                <div class="website-placeholder">
+                    <h3>🌍 Website Browser</h3>
+                    <p>Enter a URL above to browse through your VPN</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        async function generateKeys() {
+            const name = document.getElementById('keyName').value;
+            if (!name) { showMsg('Enter name', 'error'); return; }
+            try {
+                const r = await fetch('/api/keys/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name}) });
+                const d = await r.json();
+                if (d.success) {
+                    document.getElementById('publicKey').textContent = d.public_key;
+                    document.getElementById('keysStatus').style.display = 'block';
+                    showMsg('✓ Keys generated!', 'success');
+                } else showMsg('✗ ' + d.error, 'error');
+            } catch (e) { showMsg('✗ Error', 'error'); }
+        }
+
+        async function createServer() {
+            const name = document.getElementById('serverName').value;
+            const address = document.getElementById('serverAddress').value;
+            const port = document.getElementById('serverPort').value;
+            try {
+                const r = await fetch('/api/server/create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, address, port}) });
+                const d = await r.json();
+                if (d.success) {
+                    document.getElementById('serverPublicKey').textContent = d.public_key;
+                    document.getElementById('serverStatus').style.display = 'block';
+                    showMsg('✓ Server created!', 'success');
+                    loadConfigs();
+                } else showMsg('✗ ' + d.error, 'error');
+            } catch (e) { showMsg('✗ Error', 'error'); }
+        }
+
+        async function createClient() {
+            const name = document.getElementById('clientName').value;
+            const server_public_key = document.getElementById('clientServerKey').value;
+            const server_endpoint = document.getElementById('serverEndpoint').value;
+            const client_address = document.getElementById('clientAddress').value;
+            if (!name || !server_public_key || !server_endpoint) { showMsg('Fill all fields', 'error'); return; }
+            try {
+                const r = await fetch('/api/client/create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name, server_public_key, server_endpoint, client_address}) });
+                const d = await r.json();
+                if (d.success) { showMsg('✓ Client created!', 'success'); loadConfigs(); } 
+                else showMsg('✗ ' + d.error, 'error');
+            } catch (e) { showMsg('✗ Error', 'error'); }
+        }
+
+        async function loadConfigs() {
+            try {
+                const r = await fetch('/api/configs/list');
+                const c = await r.json();
+                const s = document.getElementById('configSelect');
+                s.innerHTML = '<option>Select...</option>';
+                c.forEach(x => { const o = document.createElement('option'); o.value = x.path; o.textContent = x.name; s.appendChild(o); });
+            } catch (e) { }
+        }
+
+        async function startVPN() {
+            const config = document.getElementById('configSelect').value;
+            if (!config) { showMsg('Select config', 'error'); return; }
+            try {
+                const r = await fetch('/api/vpn/start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config}) });
+                const d = await r.json();
+                if (d.success) showMsg('✓ VPN started!', 'success');
+                else showMsg('✗ ' + d.error, 'error');
+            } catch (e) { showMsg('✗ Error', 'error'); }
+        }
+
+        async function stopVPN() {
+            const config = document.getElementById('configSelect').value;
+            if (!config) { showMsg('Select config', 'error'); return; }
+            try {
+                const r = await fetch('/api/vpn/stop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({config}) });
+                const d = await r.json();
+                if (d.success) showMsg('✓ VPN stopped!', 'success');
+                else showMsg('✗ ' + d.error, 'error');
+            } catch (e) { showMsg('✗ Error', 'error'); }
+        }
+
+        async function loadWebsite() {
+            const url = document.getElementById('websiteUrl').value;
+            if (!url) { showMsg('Enter URL', 'error'); return; }
+            const c = document.getElementById('websiteContainer');
+            c.innerHTML = '<div style="display:flex;justify-content:center;align-items:center;height:100%;"><div class="loading"></div></div>';
+            try {
+                const r = await fetch('/api/website-proxy', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}) });
+                const d = await r.json();
+                if (d.success) c.innerHTML = '<pre style="white-space:pre-wrap;word-wrap:break-word;padding:20px;font-size:12px;">' + d.content + '</pre>';
+                else c.innerHTML = '<div style="padding:20px;color:#ef4444;">✗ Error: ' + d.error + '</div>';
+            } catch (e) { c.innerHTML = '<div style="padding:20px;color:#ef4444;">✗ Error</div>'; }
+        }
+
+        async function refreshStatus() {
+            try {
+                const r = await fetch('/api/status');
+                const d = await r.json();
+                document.getElementById('statusInterface').textContent = d.interface_up ? '🟢 Online' : '🔴 Offline';
+                document.getElementById('statusPeers').textContent = d.peers_connected;
+            } catch (e) { }
+        }
+
+        function showMsg(msg, type) {
+            const e = document.getElementById('setupMessage');
+            e.textContent = msg;
+            e.className = 'message show ' + type;
+            setTimeout(() => e.classList.remove('show'), 4000);
+        }
+
+        window.addEventListener('load', () => {
+            loadConfigs();
+            refreshStatus();
+            setInterval(refreshStatus, 3000);
+        });
+    </script>
+</body>
+</html>
